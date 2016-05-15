@@ -1,14 +1,12 @@
 import json
 import random
-
 import sqlite3
 import telepot
 from telepot.delegate import per_chat_id, create_open
 from apscheduler.schedulers.background import BackgroundScheduler
-from datetime import datetime, timedelta, time
+from datetime import datetime, time
 
-
-class sqler():
+class Sqler():
     def __init__(self, db_name, q):  # creation
         self.db_name = db_name
         try:
@@ -37,20 +35,17 @@ class sqler():
 
 
 class Reminder(telepot.helper.ChatHandler):  # Never Die
-    root_table = {"myString": [time(7, 45), time(12, 00)]}
+    root_table = {"myString": [time(7, 45), time(12, 00), time(22, 42)]}
+    MENU_START = '알림 시작'
+    MENU_STATUS = '알림 상태'
+    HOME = '홈으로'
+    global scheduler
 
     def __init__(self, seed_tuple, timeout):
         super(Reminder, self).__init__(seed_tuple, timeout)
-        print("Reminder __init__")
-        self.scheduler = BackgroundScheduler()
-        self.sqler = sqler("myDB.db", "CREATE TABLE myString(id int, sentence text)")
-        self.init_scheduler()
-
-        print("pickone:", self.sqler.read_pick_one("myString"))
-        self.sender.sendMessage(self.sqler.read_pick_one("myString"))
 
     def open(self, initial_msg, seed):
-        self.sender.sendMessage('Func: OPEN()')
+        self.do_HOME()
         return True  # prevent on_message() from being called on the initial message
 
     def next_time(self, time):
@@ -58,42 +53,69 @@ class Reminder(telepot.helper.ChatHandler):  # Never Die
         mtime = now.replace(hour=time.hour, minute=time.minute)
         if now > mtime:
             mtime = mtime.replace(day=now.day + 1)
-        print("next time:", mtime)
         return mtime
 
     def init_scheduler(self):
-        print("init scheduler")
-        self.scheduler.remove_all_jobs()
+        scheduler.remove_all_jobs()
         for table_name, times in self.root_table.items():
             for time in times:
                 self.sched_add(self.next_time(time), table_name=table_name)
-                print("job is registered!!")
-        self.scheduler.start()
-        print("Schduler Start")
+        self.sender.sendMessage("등록 완료")
+
+    def sched_print(self):
+        if not scheduler.get_jobs():
+            return '등록된 알림이 없습니다.'
+        result = "알림 항목:\n"
+        for i, s in enumerate(scheduler.get_jobs()):
+            result += '{0}. 저장소 이름: {1}\n설정 시간:\n{2}\n\n'.format(i + 1, s.name,
+                                                                 ":".join(str(s.next_run_time).split(":")[:2]))
+        return result
 
     # (date, msg)  (date, func)  (date, func, args)
     def sched_add(self, run_date, func=None, table_name=None, args=None):
         if table_name:
             print("sched_add: DB mode")
-            self.scheduler.add_job(self.push_msg_to_user, 'date', next_run_time=run_date, args=[table_name])
+            scheduler.add_job(self.push_msg_to_user_from_table, 'date', next_run_time=run_date, args=[table_name],
+                              name=table_name)
         elif func:
             print("sched_add: Func mode")
             mArgs = args
-            self.scheduler.add_job(func, 'date', next_run_time=run_date, args=mArgs)
+            scheduler.add_job(func, 'date', next_run_time=run_date, args=mArgs)
         else:
             print("Err: args err")
             return
 
-    def push_msg_to_user(self, table_name):
+    def push_msg_to_user_from_table(self, table_name):
         msg = self.sqler.read_pick_one(table_name)
         self.sender.sendMessage(msg)
 
+    def do_HOME(self):
+        self.sender.sendMessage('네. Remindbot입니다. 설정된 시간에 메세지를 전달합니다.')
+        show_keyboard = {'keyboard': [[self.MENU_START], [self.MENU_STATUS], [self.HOME]]}
+        self.sender.sendMessage('메뉴를 선택해주세요.', reply_markup=show_keyboard)
+
+    def do_MENU_START(self):
+        self.sqler = Sqler("myDB.db", "CREATE TABLE myString(id int, sentence text)")
+        self.init_scheduler()
+
+    def do_MENU_STATUS(self):
+        self.sender.sendMessage(self.sched_print())
+
     def handle_command(self, cmd):
-        pass
+        if cmd == self.MENU_START:
+            self.do_MENU_START()
+        if cmd == self.HOME:
+            self.do_HOME()
+        if cmd == self.MENU_STATUS:
+            self.do_MENU_STATUS()
 
     def on_chat_message(self, msg):
         content_type, chat_type, chat_id = telepot.glance(msg)
-        self.sender.sendMessage('on_chat_message: main')
+
+        # Check ID
+        if not chat_id in valid_user:
+            self.sender.sendMessage("Permission Denied")
+            return
 
         if content_type is 'text':
             self.handle_command(msg['text'])
@@ -101,8 +123,6 @@ class Reminder(telepot.helper.ChatHandler):  # Never Die
 
     def on_close(self, exception):
         pass
-        # if isinstance(exception, telepot.helper.WaitTooLong):
-        #     self.sender.sendMessage('Game expired. The answer is %d' % self._answer)
 
 
 class ConfigParser():
@@ -131,12 +151,14 @@ class ConfigParser():
         return self.validusers
 
 
+
 cp = ConfigParser()
 cp.readConfig("setting.json")
+valid_user = cp.getValidUsers()
+scheduler = BackgroundScheduler()
+scheduler.start()
 
-print("DBG: 1")
 bot = telepot.DelegatorBot(cp.getToken(), [
     (per_chat_id(), create_open(Reminder, timeout=120)),
 ])
 bot.message_loop(run_forever=True)
-print("MAIN GO")
