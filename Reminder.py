@@ -59,7 +59,7 @@ class Reminder(telepot.helper.ChatHandler):  # Never Die
         scheduler.remove_all_jobs()
         for table_name, times in self.root_table.items():
             for time in times:
-                self.sched_add(self.next_time(time), table_name=table_name)
+                self.sched_add(time, table_name=table_name)
         self.sender.sendMessage("등록 완료")
 
     def sched_print(self):
@@ -72,15 +72,15 @@ class Reminder(telepot.helper.ChatHandler):  # Never Die
         return result
 
     # (date, msg)  (date, func)  (date, func, args)
-    def sched_add(self, run_date, func=None, table_name=None, args=None):
+    def sched_add(self, run_at, func=None, table_name=None, args=None):
         if table_name:
             print("sched_add: DB mode")
-            scheduler.add_job(self.push_msg_to_user_from_table, 'date', next_run_time=run_date, args=[table_name],
+            scheduler.add_job(self.push_msg_to_user_from_table, 'cron', hour=run_at.hour, minute=run_at.minute, args=[table_name],
                               name=table_name)
         elif func:
             print("sched_add: Func mode")
             mArgs = args
-            scheduler.add_job(func, 'date', next_run_time=run_date, args=mArgs)
+            scheduler.add_job(func, 'date', next_run_time=run_at, args=mArgs)
         else:
             print("Err: args err")
             return
