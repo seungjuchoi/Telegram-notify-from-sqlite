@@ -35,7 +35,7 @@ class Sqler():
 
 
 class Reminder(telepot.helper.ChatHandler):  # Never Die
-    root_table = {"myString": [time(7, 45), time(12, 00), time(22, 42)]}
+    root_table = {"myString": [time(7, 45), time(12, 00), time(15,00), time(20, 00)]}
     MENU_START = '알림 시작'
     MENU_STATUS = '알림 상태'
     HOME = '홈으로'
@@ -86,7 +86,9 @@ class Reminder(telepot.helper.ChatHandler):  # Never Die
             return
 
     def push_msg_to_user_from_table(self, table_name):
-        msg = self.sqler.read_pick_one(table_name)
+        sentence = self.sqler.read_pick_one(table_name)
+        now = datetime.now()
+        msg = str(now.hour)+"시 " + str(now.minute)+"분: " + sentence
         self.sender.sendMessage(msg)
 
     def do_HOME(self):
