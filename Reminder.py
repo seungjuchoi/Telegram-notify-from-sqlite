@@ -88,7 +88,10 @@ class Reminder(telepot.helper.ChatHandler):  # Never Die
     def push_msg_to_user_from_table(self, table_name):
         sentence = self.sqler.read_pick_one(table_name)
         now = datetime.now()
-        msg = str(now.hour)+"시 " + str(now.minute)+"분: " + sentence
+        min = ""
+        if now.minute == 0:
+            min = str(now.minute) + "분: "
+        msg = str(now.hour)+"시 " + min + sentence
         self.sender.sendMessage(msg)
 
     def do_HOME(self):
