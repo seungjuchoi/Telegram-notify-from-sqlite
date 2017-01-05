@@ -1,8 +1,9 @@
+#!/usr/bin/python3
 import json
 import random
 import sqlite3
 import telepot
-from telepot.delegate import per_chat_id, create_open
+from telepot.delegate import per_chat_id, create_open, pave_event_space
 from apscheduler.schedulers.background import BackgroundScheduler
 from datetime import datetime, time
 
@@ -41,8 +42,8 @@ class Reminder(telepot.helper.ChatHandler):  # Never Die
     HOME = '홈으로'
     global scheduler
 
-    def __init__(self, seed_tuple, timeout):
-        super(Reminder, self).__init__(seed_tuple, timeout)
+    def __init__(self, *args, **kwargs):
+        super(Reminder, self).__init__(*args, **kwargs)
 
     def open(self, initial_msg, seed):
         self.do_HOME()
@@ -164,6 +165,7 @@ scheduler = BackgroundScheduler()
 scheduler.start()
 
 bot = telepot.DelegatorBot(cp.getToken(), [
-    (per_chat_id(), create_open(Reminder, timeout=120)),
+    pave_event_space()(
+        per_chat_id(), create_open, Reminder, timeout=120),
 ])
-bot.message_loop(run_forever=True)
+bot.message_loop(run_forever='Listening ...')
