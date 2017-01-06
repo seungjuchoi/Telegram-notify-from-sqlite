@@ -3,11 +3,12 @@ import json
 import random
 import sqlite3
 import telepot
+import pymongo
 from telepot.delegate import per_chat_id, create_open, pave_event_space
 from apscheduler.schedulers.background import BackgroundScheduler
 from datetime import datetime, time
 
-class Sqler():
+class DB_Manager():
     def __init__(self, db_name, q):  # creation
         self.db_name = db_name
         try:
@@ -20,7 +21,7 @@ class Sqler():
         except Exception as err:
             print("SQLITE ERR:", err)
 
-    def read_pick_one(self, table_name):
+    def cherry_pick_string(self, table_name):
         try:
             con = sqlite3.connect(self.db_name)
             cursor = con.cursor()
@@ -34,12 +35,18 @@ class Sqler():
         except Exception as err:
             print("SQLITE ERR:", err)
 
+    def delete_string(self):
+        pass
+
+    def edit_string(self):
+        pass
+
 
 class Reminder(telepot.helper.ChatHandler):  # Never Die
     root_table = {"myString": [time(7, 45), time(12, 00), time(15,00), time(20, 00)]}
-    MENU_START = '알림 시작'
-    MENU_STATUS = '알림 상태'
-    HOME = '홈으로'
+    MENU_START = 'Start Notification'
+    MENU_STATUS = 'Notification Status'
+    HOME = 'HOME'
     global scheduler
 
     def __init__(self, *args, **kwargs):
@@ -61,14 +68,14 @@ class Reminder(telepot.helper.ChatHandler):  # Never Die
         for table_name, times in self.root_table.items():
             for time in times:
                 self.sched_add(time, table_name=table_name)
-        self.sender.sendMessage("등록 완료")
+        self.sender.sendMessage("The registration has completed")
 
     def sched_print(self):
         if not scheduler.get_jobs():
-            return '등록된 알림이 없습니다.'
-        result = "알림 항목:\n"
+            return 'There is no Notification'
+        result = "Notification Table:\n"
         for i, s in enumerate(scheduler.get_jobs()):
-            result += '{0}. 저장소 이름: {1}\n설정 시간:\n{2}\n\n'.format(i + 1, s.name,
+            result += '{0}. Repositary name: {1}\nSetting time:\n{2}\n\n'.format(i + 1, s.name,
                                                                  ":".join(str(s.next_run_time).split(":")[:2]))
         return result
 
@@ -87,21 +94,16 @@ class Reminder(telepot.helper.ChatHandler):  # Never Die
             return
 
     def push_msg_to_user_from_table(self, table_name):
-        sentence = self.sqler.read_pick_one(table_name)
-        now = datetime.now()
-        min = ""
-        if now.minute == 0:
-            min = str(now.minute) + "분: "
-        msg = str(now.hour)+"시 " + min + sentence
-        self.sender.sendMessage(msg)
+        sentence = self.sqler.cherry_pick_string(table_name)
+        self.sender.sendMessage(sentence)
 
     def do_HOME(self):
-        self.sender.sendMessage('네. Remindbot입니다. 설정된 시간에 메세지를 전달합니다.')
+        self.sender.sendMessage("Yes, I'm Re-Reminder.")
         show_keyboard = {'keyboard': [[self.MENU_START], [self.MENU_STATUS], [self.HOME]]}
-        self.sender.sendMessage('메뉴를 선택해주세요.', reply_markup=show_keyboard)
+        self.sender.sendMessage('Choose a option.', reply_markup=show_keyboard)
 
     def do_MENU_START(self):
-        self.sqler = Sqler("myDB.db", "CREATE TABLE myString(id int, sentence text)")
+        self.sqler = DB_Manager("myDB.db", "CREATE TABLE myString(id int, sentence text)")
         self.init_scheduler()
 
     def do_MENU_STATUS(self):
@@ -155,8 +157,6 @@ class ConfigParser():
 
     def getValidUsers(self):
         return self.validusers
-
-
 
 cp = ConfigParser()
 cp.readConfig("setting.json")
