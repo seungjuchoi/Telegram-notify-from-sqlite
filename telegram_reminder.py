@@ -8,7 +8,9 @@ from telepot.delegate import per_chat_id, create_open, pave_event_space
 from apscheduler.schedulers.background import BackgroundScheduler
 from datetime import datetime, time
 
+
 class DB_Manager():
+
     def __init__(self, db_name, q):  # creation
         self.db_name = db_name
         try:
@@ -41,9 +43,15 @@ class DB_Manager():
     def edit_string(self):
         pass
 
+    def add_user(self):
+        '''
+        userid / main time period /
+        '''
+        pass
+
 
 class Reminder(telepot.helper.ChatHandler):  # Never Die
-    root_table = {"myString": [time(7, 45), time(12, 00), time(15,00), time(20, 00)]}
+    root_table = {"myString": cp.getDefaultTime()}
     MENU_START = 'Start Notification'
     MENU_STATUS = 'Notification Status'
     HOME = 'HOME'
@@ -72,11 +80,11 @@ class Reminder(telepot.helper.ChatHandler):  # Never Die
 
     def sched_print(self):
         if not scheduler.get_jobs():
-            return 'There is no Notification'
+            return 'There is no Notifications'
         result = "Notification Table:\n"
         for i, s in enumerate(scheduler.get_jobs()):
             result += '{0}. Repositary name: {1}\nSetting time:\n{2}\n\n'.format(i + 1, s.name,
-                                                                 ":".join(str(s.next_run_time).split(":")[:2]))
+                                                                                 ":".join(str(s.next_run_time).split(":")[:2]))
         return result
 
     # (date, msg)  (date, func)  (date, func, args)
@@ -98,12 +106,14 @@ class Reminder(telepot.helper.ChatHandler):  # Never Die
         self.sender.sendMessage(sentence)
 
     def do_HOME(self):
-        self.sender.sendMessage("Yes, I'm Re-Reminder.")
-        show_keyboard = {'keyboard': [[self.MENU_START], [self.MENU_STATUS], [self.HOME]]}
+        self.sender.sendMessage("Yes, I'm Red-Reminder.")
+        show_keyboard = {'keyboard': [
+            [self.MENU_START], [self.MENU_STATUS], [self.HOME]]}
         self.sender.sendMessage('Choose a option.', reply_markup=show_keyboard)
 
     def do_MENU_START(self):
-        self.sqler = DB_Manager("myDB.db", "CREATE TABLE myString(id int, sentence text)")
+        self.sqler = DB_Manager(
+            "myDB.db", "CREATE TABLE myString(id int, sentence text)")
         self.init_scheduler()
 
     def do_MENU_STATUS(self):
@@ -134,9 +144,11 @@ class Reminder(telepot.helper.ChatHandler):  # Never Die
 
 
 class ConfigParser():
+
     def __init__(self):
         self.token = ""
         self.validusers = []
+        self.default_time = []
 
     def readConfig(self, file):
         configDic = self.parseConfig(file)
@@ -145,6 +157,11 @@ class ConfigParser():
             return False
         self.token = configDic['common']['token']
         self.validusers = configDic['common']['valid_users']
+        for t in configDic['common']['default_time']:
+            hour = int(t.split(":")[0])
+            minute = int(t.split(":")[1])
+            self.default_time.append(time(hour, minute))
+        self.default_time = list(set(self.default_time))
 
     def parseConfig(self, filename):
         f = open(filename, 'r')
@@ -157,6 +174,9 @@ class ConfigParser():
 
     def getValidUsers(self):
         return self.validusers
+
+    def getDefaultTime(self):
+        return self.default_time
 
 cp = ConfigParser()
 cp.readConfig("setting.json")
