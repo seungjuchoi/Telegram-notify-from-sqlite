@@ -50,19 +50,21 @@ class DB_Manager():
         pass
 
 
-class Reminder(telepot.helper.ChatHandler):  # Never Die
-    root_table = {"myString": cp.getDefaultTime()}
-    MENU_START = 'Start Notification'
-    MENU_STATUS = 'Notification Status'
-    HOME = 'HOME'
-    global scheduler
+class Sentance_Scheduler():
 
-    def __init__(self, *args, **kwargs):
-        super(Reminder, self).__init__(*args, **kwargs)
+    def __init__(self, chat_id, rock_times=None, maple_times=None):
+        self.time_table = {}
+        self.chat_id = chat_id
+        if rock_times:
+            self.time_table.update({"Rock": rock_times})
+        else:
+            self.time_table.update({"Rock": cp.getDefaultTime()})
+        for layer, times in self.time_table.items():
+            for time in times:
+                self.sched_add(chat_id, time, layer_name=layer)
 
-    def open(self, initial_msg, seed):
-        self.do_HOME()
-        return True  # prevent on_message() from being called on the initial message
+    def update_scheduler(self, layer_time):
+        self.time_table.update(layer_time)
 
     def next_time(self, time):
         now = datetime.now()
@@ -71,35 +73,41 @@ class Reminder(telepot.helper.ChatHandler):  # Never Die
             mtime = mtime.replace(day=now.day + 1)
         return mtime
 
-    def init_scheduler(self):
-        scheduler.remove_all_jobs()
-        for table_name, times in self.root_table.items():
-            for time in times:
-                self.sched_add(time, table_name=table_name)
-        self.sender.sendMessage("The registration has completed")
-
     def sched_print(self):
-        if not scheduler.get_jobs():
+        if not mainSchdule.get_jobs():
             return 'There is no Notifications'
         result = "Notification Table:\n"
-        for i, s in enumerate(scheduler.get_jobs()):
+        for i, s in enumerate(mainSchdule.get_jobs()):
             result += '{0}. Repositary name: {1}\nSetting time:\n{2}\n\n'.format(i + 1, s.name,
                                                                                  ":".join(str(s.next_run_time).split(":")[:2]))
         return result
 
     # (date, msg)  (date, func)  (date, func, args)
-    def sched_add(self, run_at, func=None, table_name=None, args=None):
+    def sched_add(self, chat_id, run_at, func=None, layer_name=None, args=None):
         if table_name:
             print("sched_add: DB mode")
-            scheduler.add_job(self.push_msg_to_user_from_table, 'cron', hour=run_at.hour, minute=run_at.minute, args=[table_name],
+            mainSchdule.add_job(self.push_msg_to_user_from_table, 'cron', hour=run_at.hour, minute=run_at.minute, args=[table_name],
                               name=table_name)
         elif func:
             print("sched_add: Func mode")
             mArgs = args
-            scheduler.add_job(func, 'date', next_run_time=run_at, args=mArgs)
+            mainSchdule.add_job(func, 'date', next_run_time=run_at, args=mArgs)
         else:
             print("Err: args err")
             return
+
+
+class Reminder(telepot.helper.ChatHandler):  # Never Die
+    MENU_START = 'Start Notification'
+    MENU_STATUS = 'Notification Status'
+    HOME = 'HOME'
+
+    def __init__(self, *args, **kwargs):
+        super(Reminder, self).__init__(*args, **kwargs)
+
+    def open(self, initial_msg, seed):
+        self.do_HOME()
+        return True  # prevent on_message() from being called on the initial message
 
     def push_msg_to_user_from_table(self, table_name):
         sentence = self.sqler.cherry_pick_string(table_name)
@@ -114,12 +122,13 @@ class Reminder(telepot.helper.ChatHandler):  # Never Die
     def do_MENU_START(self):
         self.sqler = DB_Manager(
             "myDB.db", "CREATE TABLE myString(id int, sentence text)")
-        self.init_scheduler()
+        self.mScheduller = Sentance_Scheduler(self.chat_id)
+        self.sender.sendMessage("The registration has completed")
 
     def do_MENU_STATUS(self):
         self.sender.sendMessage(self.sched_print())
 
-    def handle_command(self, cmd):
+    def handle_text(self, cmd):
         if cmd == self.MENU_START:
             self.do_MENU_START()
         if cmd == self.HOME:
@@ -129,6 +138,7 @@ class Reminder(telepot.helper.ChatHandler):  # Never Die
 
     def on_chat_message(self, msg):
         content_type, chat_type, chat_id = telepot.glance(msg)
+        self.chat_id = chat_id
 
         # Check ID
         if not chat_id in valid_user:
@@ -136,7 +146,7 @@ class Reminder(telepot.helper.ChatHandler):  # Never Die
             return
 
         if content_type is 'text':
-            self.handle_command(msg['text'])
+            self.handle_text(msg['text'])
             return
 
     def on_close(self, exception):
@@ -178,11 +188,15 @@ class ConfigParser():
     def getDefaultTime(self):
         return self.default_time
 
+
+# Parse a config
 cp = ConfigParser()
 cp.readConfig("setting.json")
 valid_user = cp.getValidUsers()
-scheduler = BackgroundScheduler()
-scheduler.start()
+
+# Start scheduler
+mainSchdule = BackgroundScheduler()
+mainSchdule.start()
 
 bot = telepot.DelegatorBot(cp.getToken(), [
     pave_event_space()(
