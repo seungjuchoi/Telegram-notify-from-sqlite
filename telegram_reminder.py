@@ -1,41 +1,19 @@
 #!/usr/bin/python3
 import json
-import random
-import sqlite3
 import telepot
 import pymongo
 from telepot.delegate import per_chat_id, create_open, pave_event_space
 from apscheduler.schedulers.background import BackgroundScheduler
-from datetime import datetime, time
+from datetime import time
 
 
 class DB_Manager():
 
-    def __init__(self, db_name, q):  # creation
-        self.db_name = db_name
-        try:
-            con = sqlite3.connect(db_name)
-            cursor = con.cursor()
-            cursor.execute(q)
-            con.commit()
-            con.close()
-            print("sqler: db creation done")
-        except Exception as err:
-            print("SQLITE ERR:", err)
+    def __init__(self, db, collection):  # creation
+        self.db = pymongo.MongoClient().db
 
-    def cherry_pick_string(self, table_name):
-        try:
-            con = sqlite3.connect(self.db_name)
-            cursor = con.cursor()
-            cursor.execute('select * from %s' % table_name)
-            rows = cursor.fetchall()
-            idx = random.randrange(len(rows))
-            row = rows[idx]
-            con.commit()
-            con.close()
-            return row[1]  # string
-        except Exception as err:
-            print("SQLITE ERR:", err)
+    def random_pick(self, layer):
+        pass
 
     def delete_string(self):
         pass
@@ -52,28 +30,23 @@ class DB_Manager():
 
 class Sentance_Scheduler():
 
-    def __init__(self, chat_id, rock_times=None, maple_times=None):
+    def __init__(self, chat_id, cb_handler, layer_times=None):
         self.time_table = {}
         self.chat_id = chat_id
-        if rock_times:
-            self.time_table.update({"Rock": rock_times})
+        self.db = DB_Manager(chat_id)
+        self.t_handler = cb_handler
+        if layer_times:
+            self.sched_update(layer_times)
         else:
-            self.time_table.update({"Rock": cp.getDefaultTime()})
+            self.sched_update({"Rock": cp.getDefaultTime()})
+
+    def sched_update(self, layer_times):
+        self.time_table.update(layer_times)
         for layer, times in self.time_table.items():
             for time in times:
-                self.sched_add(chat_id, time, layer_name=layer)
+                self.task_add(self.chat_id, time, layer_name=layer)
 
-    def update_scheduler(self, layer_time):
-        self.time_table.update(layer_time)
-
-    def next_time(self, time):
-        now = datetime.now()
-        mtime = now.replace(hour=time.hour, minute=time.minute)
-        if now > mtime:
-            mtime = mtime.replace(day=now.day + 1)
-        return mtime
-
-    def sched_print(self):
+    def task_all_print(self):
         if not mainSchdule.get_jobs():
             return 'There is no Notifications'
         result = "Notification Table:\n"
@@ -82,19 +55,27 @@ class Sentance_Scheduler():
                                                                                  ":".join(str(s.next_run_time).split(":")[:2]))
         return result
 
+    def pick_random(self):
+        contents = self.db.random_pick()
+
+    def pick_weight(self):
+        print("TODO: WEIGHT PICK!")
+        pass
+
     # (date, msg)  (date, func)  (date, func, args)
-    def sched_add(self, chat_id, run_at, func=None, layer_name=None, args=None):
-        if table_name:
-            print("sched_add: DB mode")
-            mainSchdule.add_job(self.push_msg_to_user_from_table, 'cron', hour=run_at.hour, minute=run_at.minute, args=[table_name],
-                              name=table_name)
-        elif func:
-            print("sched_add: Func mode")
-            mArgs = args
-            mainSchdule.add_job(func, 'date', next_run_time=run_at, args=mArgs)
+    def task_add(self, chat_id, run_at, layer_name, args=None, pick_mode="RANDOM"):
+        if pick_mode == "RANDOM":
+            mainSchdule.add_job(self.pick_random, 'cron', hour=run_at.hour, minute=run_at.minute)
+        elif pick_mode == "LOW_WEIGHT":
+            mainSchdule.add_job(self.pick_weight, 'cron', hour=run_at.hour, minute=run_at.minute, args=[layer_name, chat_id],
+                                name=layer_name)
         else:
             print("Err: args err")
             return
+
+    def task_modify(self):
+        pass
+
 
 
 class Reminder(telepot.helper.ChatHandler):  # Never Die
@@ -109,10 +90,6 @@ class Reminder(telepot.helper.ChatHandler):  # Never Die
         self.do_HOME()
         return True  # prevent on_message() from being called on the initial message
 
-    def push_msg_to_user_from_table(self, table_name):
-        sentence = self.sqler.cherry_pick_string(table_name)
-        self.sender.sendMessage(sentence)
-
     def do_HOME(self):
         self.sender.sendMessage("Yes, I'm Red-Reminder.")
         show_keyboard = {'keyboard': [
@@ -120,9 +97,7 @@ class Reminder(telepot.helper.ChatHandler):  # Never Die
         self.sender.sendMessage('Choose a option.', reply_markup=show_keyboard)
 
     def do_MENU_START(self):
-        self.sqler = DB_Manager(
-            "myDB.db", "CREATE TABLE myString(id int, sentence text)")
-        self.mScheduller = Sentance_Scheduler(self.chat_id)
+        self.mScheduller = Sentance_Scheduler(self.chat_id, self.sched_cb_handler)
         self.sender.sendMessage("The registration has completed")
 
     def do_MENU_STATUS(self):
@@ -148,6 +123,12 @@ class Reminder(telepot.helper.ChatHandler):  # Never Die
         if content_type is 'text':
             self.handle_text(msg['text'])
             return
+
+    def sched_cb_handler(self, **kwargs):
+        for k, v in kwargs:
+            if k == 'text':
+                self.sender.sendMessage(v)
+        pass
 
     def on_close(self, exception):
         pass
