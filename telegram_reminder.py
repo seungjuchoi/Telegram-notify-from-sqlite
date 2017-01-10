@@ -10,9 +10,14 @@ from datetime import time
 class DB_Manager():
 
     def __init__(self, db, collection):  # creation
-        self.db = pymongo.MongoClient().db
+        self.db = pymongo.MongoClient()[db]
+        self.col = db['m'+str(collection)]
 
-    def random_pick(self, layer):
+    def pick_random(self, layer):
+        return self.col.aggregate([{'$match': {'layer': layer}}, {'$sample': {'size': 1}}])['Contents']
+
+    def pick_weight(self, layer, weight_index="weight"):
+        print("TODO: WEIGHT PICK!")
         pass
 
     def delete_string(self):
@@ -21,30 +26,24 @@ class DB_Manager():
     def edit_string(self):
         pass
 
-    def add_user(self):
-        '''
-        userid / main time period /
-        '''
-        pass
-
 
 class Sentance_Scheduler():
 
     def __init__(self, chat_id, cb_handler, layer_times=None):
         self.time_table = {}
         self.chat_id = chat_id
-        self.db = DB_Manager(chat_id)
+        self.db = DB_Manager("sentences", chat_id)
         self.t_handler = cb_handler
         if layer_times:
             self.sched_update(layer_times)
         else:
-            self.sched_update({"Rock": cp.getDefaultTime()})
+            self.sched_update({"rock": cp.getDefaultTime()})
 
     def sched_update(self, layer_times):
         self.time_table.update(layer_times)
         for layer, times in self.time_table.items():
             for time in times:
-                self.task_add(self.chat_id, time, layer_name=layer)
+                self.task_add(self.chat_id, time, layer=layer)
 
     def task_all_print(self):
         if not mainSchdule.get_jobs():
@@ -55,20 +54,12 @@ class Sentance_Scheduler():
                                                                                  ":".join(str(s.next_run_time).split(":")[:2]))
         return result
 
-    def pick_random(self):
-        contents = self.db.random_pick()
-
-    def pick_weight(self):
-        print("TODO: WEIGHT PICK!")
-        pass
-
-    # (date, msg)  (date, func)  (date, func, args)
-    def task_add(self, chat_id, run_at, layer_name, args=None, pick_mode="RANDOM"):
+    def task_add(self, chat_id, run_at, layer, args=None, pick_mode="RANDOM"):
         if pick_mode == "RANDOM":
-            mainSchdule.add_job(self.pick_random, 'cron', hour=run_at.hour, minute=run_at.minute)
+            mainSchdule.add_job(self.db.pick_random(layer), 'cron', hour=run_at.hour, minute=run_at.minute)
         elif pick_mode == "LOW_WEIGHT":
-            mainSchdule.add_job(self.pick_weight, 'cron', hour=run_at.hour, minute=run_at.minute, args=[layer_name, chat_id],
-                                name=layer_name)
+            mainSchdule.add_job(self.db.pick_weight(layer), 'cron', hour=run_at.hour, minute=run_at.minute, args=[layer, chat_id],
+                                name=layer)
         else:
             print("Err: args err")
             return
@@ -78,7 +69,7 @@ class Sentance_Scheduler():
 
 
 
-class Reminder(telepot.helper.ChatHandler):  # Never Die
+class Reminder(telepot.helper.ChatHandler):
     MENU_START = 'Start Notification'
     MENU_STATUS = 'Notification Status'
     HOME = 'HOME'
@@ -116,7 +107,7 @@ class Reminder(telepot.helper.ChatHandler):  # Never Die
         self.chat_id = chat_id
 
         # Check ID
-        if not chat_id in valid_user:
+        if not chat_id in valid_users:
             self.sender.sendMessage("Permission Denied")
             return
 
@@ -138,7 +129,7 @@ class ConfigParser():
 
     def __init__(self):
         self.token = ""
-        self.validusers = []
+        self.valid_chat_id = []
         self.default_time = []
 
     def readConfig(self, file):
@@ -147,7 +138,7 @@ class ConfigParser():
             print("Err: The Config File Not Found!")
             return False
         self.token = configDic['common']['token']
-        self.validusers = configDic['common']['valid_users']
+        self.valid_chat_id = configDic['common']['valid_users']
         for t in configDic['common']['default_time']:
             hour = int(t.split(":")[0])
             minute = int(t.split(":")[1])
@@ -164,7 +155,7 @@ class ConfigParser():
         return self.token
 
     def getValidUsers(self):
-        return self.validusers
+        return self.valid_chat_id
 
     def getDefaultTime(self):
         return self.default_time
@@ -173,7 +164,7 @@ class ConfigParser():
 # Parse a config
 cp = ConfigParser()
 cp.readConfig("setting.json")
-valid_user = cp.getValidUsers()
+valid_users = cp.getValidUsers()
 
 # Start scheduler
 mainSchdule = BackgroundScheduler()
