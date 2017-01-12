@@ -1,9 +1,10 @@
 {
   "common": {
     "token": "123456789:lskdjflVLKDkdJFslkejfLSDflkes",
-    "valid_users": [
+    "valid_chat_id": [
       111111111,
       111111111
-    ]
+    ],
+    "default_time" : ["7:45", "12:00", "15:00", "20:00"]
   }
 }
