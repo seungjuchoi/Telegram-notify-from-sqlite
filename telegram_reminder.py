@@ -11,7 +11,7 @@ class DB_Manager():
 
     def __init__(self, db, collection):  # creation
         self.db = pymongo.MongoClient()[db]
-        self.col = db['m'+str(collection)]
+        self.col = db['M'+str(collection)]
 
     def pick_random(self, layer):
         return self.col.aggregate([{'$match': {'layer': layer}}, {'$sample': {'size': 1}}])['Contents']
@@ -46,20 +46,20 @@ class Sentance_Scheduler():
                 self.task_add(self.chat_id, time, layer=layer)
 
     def task_all_print(self):
-        if not mainSchdule.get_jobs():
+        if not mainSchedule.get_jobs():
             return 'There is no Notifications'
         result = "Notification Table:\n"
-        for i, s in enumerate(mainSchdule.get_jobs()):
+        for i, s in enumerate(mainSchedule.get_jobs()):
             result += '{0}. Repositary name: {1}\nSetting time:\n{2}\n\n'.format(i + 1, s.name,
                                                                                  ":".join(str(s.next_run_time).split(":")[:2]))
         return result
 
     def task_add(self, chat_id, run_at, layer, args=None, pick_mode="RANDOM"):
         if pick_mode == "RANDOM":
-            mainSchdule.add_job(self.db.pick_random(layer), 'cron', hour=run_at.hour, minute=run_at.minute)
+            mainSchedule.add_job(self.db.pick_random(layer), 'cron', hour=run_at.hour, minute=run_at.minute)
         elif pick_mode == "LOW_WEIGHT":
-            mainSchdule.add_job(self.db.pick_weight(layer), 'cron', hour=run_at.hour, minute=run_at.minute, args=[layer, chat_id],
-                                name=layer)
+            mainSchedule.add_job(self.db.pick_weight(layer), 'cron', hour=run_at.hour, minute=run_at.minute, args=[layer, chat_id],
+                                 name=layer)
         else:
             print("Err: args err")
             return
@@ -82,7 +82,7 @@ class Reminder(telepot.helper.ChatHandler):
         return True  # prevent on_message() from being called on the initial message
 
     def do_HOME(self):
-        self.sender.sendMessage("Yes, I'm Red-Reminder.")
+        self.sender.sendMessage("Yes, I'm Re-Reminder.")
         show_keyboard = {'keyboard': [
             [self.MENU_START], [self.MENU_STATUS], [self.HOME]]}
         self.sender.sendMessage('Choose a option.', reply_markup=show_keyboard)
@@ -92,7 +92,7 @@ class Reminder(telepot.helper.ChatHandler):
         self.sender.sendMessage("The registration has completed")
 
     def do_MENU_STATUS(self):
-        self.sender.sendMessage(self.sched_print())
+        self.sender.sendMessage(self.mScheduller.task_all_print())
 
     def handle_text(self, cmd):
         if cmd == self.MENU_START:
@@ -105,6 +105,7 @@ class Reminder(telepot.helper.ChatHandler):
     def on_chat_message(self, msg):
         content_type, chat_type, chat_id = telepot.glance(msg)
         self.chat_id = chat_id
+        print("content_type={}, chat_type={}, chat_id={}".format(content_type, chat_type, chat_id))
 
         # Check ID
         if not chat_id in valid_users:
@@ -167,8 +168,8 @@ cp.readConfig("setting.json")
 valid_users = cp.getValidUsers()
 
 # Start scheduler
-mainSchdule = BackgroundScheduler()
-mainSchdule.start()
+mainSchedule = BackgroundScheduler()
+mainSchedule.start()
 
 bot = telepot.DelegatorBot(cp.getToken(), [
     pave_event_space()(
