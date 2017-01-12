@@ -43,6 +43,7 @@ class Sentance_Scheduler():
 
     def sched_update(self, layer_times):
         self.time_table.update(layer_times)
+        mainSchedule.remove_all_jobs()
         for layer, times in self.time_table.items():
             for time in times:
                 self.task_add(self.chat_id, time, layer=layer)
@@ -78,6 +79,7 @@ class Reminder(telepot.helper.ChatHandler):
 
     def __init__(self, *args, **kwargs):
         super(Reminder, self).__init__(*args, **kwargs)
+        self.mScheduler = None
 
     def open(self, initial_msg, seed):
         self.do_HOME()
@@ -90,11 +92,14 @@ class Reminder(telepot.helper.ChatHandler):
         self.sender.sendMessage('Choose a option.', reply_markup=show_keyboard)
 
     def do_MENU_START(self):
-        self.mScheduller = Sentance_Scheduler(self.chatID, self.sched_cb_handler)
+        self.mScheduler = Sentance_Scheduler(self.chatID, self.sched_cb_handler)
         self.sender.sendMessage("The registration has completed")
 
     def do_MENU_STATUS(self):
-        self.sender.sendMessage(self.mScheduller.task_all_print())
+        if self.mScheduler != None:
+            self.sender.sendMessage(self.mScheduler.task_all_print())
+        else:
+            self.sender.sendMessage("There is no notification")
 
     def handle_text(self, cmd):
         if cmd == self.MENU_START:
@@ -151,7 +156,7 @@ class ConfigParser():
 # Parse a config
 cp = ConfigParser().load("setting.json")
 if not cp:
-    print("Err: The Config File Not Found!")
+    print("Err: Nothing to be parsed")
 valid_users = cp['valid_chat_id']
 
 # Start scheduler
