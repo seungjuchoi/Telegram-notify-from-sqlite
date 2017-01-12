@@ -39,7 +39,7 @@ class Sentance_Scheduler():
         if layer_times:
             self.sched_update(layer_times)
         else:
-            self.sched_update({"rock": cp.getDefaultTime()})
+            self.sched_update({"rock": cp['default_time']})
 
     def sched_update(self, layer_times):
         self.time_table.update(layer_times)
@@ -109,7 +109,7 @@ class Reminder(telepot.helper.ChatHandler):
         self.chatID = chat_id
 
         # Check ID
-        if not chat_id in valid_users:
+        if not chat_id in cp['valid_chat_id']:
             self.sender.sendMessage("Permission Denied")
             return
 
@@ -127,50 +127,38 @@ class Reminder(telepot.helper.ChatHandler):
 
 class ConfigParser():
 
-    def __init__(self):
-        self.token = ""
-        self.valid_chat_id = []
-        self.default_time = []
-
-    def readConfig(self, file):
-        configDic = self.parseConfig(file)
+    def load(self, file):
+        f = open(file, 'r')
+        configDic = json.loads(f.read())
+        f.close()
         if not bool(configDic):
-            print("Err: The Config File Not Found!")
             return False
-        self.token = configDic['common']['token']
-        self.valid_chat_id = configDic['common']['valid_chat_id']
+        outDic={}
+        outDic['token'] = configDic['common']['token']
+        outDic['valid_chat_id'] = configDic['common']['valid_chat_id']
+        outDic['default_time'] = self.getDefaultTime(configDic)
+        outDic['default_time_zone'] = configDic['common']['default_time_zone']
+        return outDic
+
+    def getDefaultTime(self, configDic):
+        self.default_times = []
         for t in configDic['common']['default_time']:
             hour = int(t.split(":")[0])
             minute = int(t.split(":")[1])
-            self.default_time.append(time(hour, minute))
-        self.default_time = list(set(self.default_time))
-
-    def parseConfig(self, filename):
-        f = open(filename, 'r')
-        js = json.loads(f.read())
-        f.close()
-        return js
-
-    def getToken(self):
-        return self.token
-
-    def getValidUsers(self):
-        return self.valid_chat_id
-
-    def getDefaultTime(self):
-        return self.default_time
-
+            self.default_times.append(time(hour, minute))
+        return list(set(self.default_times))
 
 # Parse a config
-cp = ConfigParser()
-cp.readConfig("setting.json")
-valid_users = cp.getValidUsers()
+cp = ConfigParser().load("setting.json")
+if not cp:
+    print("Err: The Config File Not Found!")
+valid_users = cp['valid_chat_id']
 
 # Start scheduler
-mainSchedule = BackgroundScheduler()
+mainSchedule = BackgroundScheduler(timezone=cp['default_time_zone'])
 mainSchedule.start()
 
-bot = telepot.DelegatorBot(cp.getToken(), [
+bot = telepot.DelegatorBot(cp['token'], [
     pave_event_space()(
         per_chat_id(), create_open, Reminder, timeout=120),
 ])
