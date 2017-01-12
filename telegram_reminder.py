@@ -139,7 +139,7 @@ class ConfigParser():
             print("Err: The Config File Not Found!")
             return False
         self.token = configDic['common']['token']
-        self.valid_chat_id = configDic['common']['valid_users']
+        self.valid_chat_id = configDic['common']['valid_chat_id']
         for t in configDic['common']['default_time']:
             hour = int(t.split(":")[0])
             minute = int(t.split(":")[1])
