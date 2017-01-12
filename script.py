@@ -2,7 +2,7 @@ import pymongo
 from pprint import pprint
 
 db = pymongo.MongoClient().sentences
-col = db.string
+col = db.MXXXXX
 '''
 All update tag
 for c in col.find():
@@ -14,11 +14,11 @@ for c in col.find():
 '''
 All update layer
 col.update_many({},{'$set': {'layer':'rock'}})
-'''
-
-
-
-layer
-
 for c in col.find():
     pprint(c)
+'''
+a = list(col.aggregate([{'$match': {'layer': 'rock'}}, {'$sample': {'size': 1}}]))[0]['Contents']
+
+pprint(a)
+
+
