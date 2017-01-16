@@ -2,6 +2,7 @@
 import json
 import telepot
 import pymongo
+import logging
 from telepot.delegate import per_chat_id, create_open, pave_event_space
 from apscheduler.schedulers.background import BackgroundScheduler
 from datetime import time
@@ -19,7 +20,7 @@ class DB_Manager():
         self.handler(text)
 
     def pick_weight(self, layer, weight_index="weight"):
-        print("TODO: WEIGHT PICK!")
+        logger.info("TODO: WEIGHT PICK!")
         pass
 
     def delete_string(self):
@@ -64,7 +65,7 @@ class Sentance_Scheduler():
             mainSchedule.add_job(self.db.pick_weight, 'cron', hour=run_at.hour, minute=run_at.minute, args=[layer, chat_id],
                                  name=layer)
         else:
-            print("Err: args err")
+            logger.error("Err: args err")
             return
 
     def task_modify(self):
@@ -79,6 +80,7 @@ class Reminder(telepot.helper.ChatHandler):
 
     def __init__(self, *args, **kwargs):
         super(Reminder, self).__init__(*args, **kwargs)
+        logger.info("Start Reminder")
         self.mScheduler = None
 
     def open(self, initial_msg, seed):
@@ -153,10 +155,22 @@ class ConfigParser():
             self.default_times.append(time(hour, minute))
         return list(set(self.default_times))
 
+# logging
+logger = logging.getLogger('reminder')
+logger.setLevel(logging.DEBUG)
+ch = logging.StreamHandler()
+ch.setLevel(logging.DEBUG)
+ch.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+logger.addHandler(ch)
+ch = logging.FileHandler(filename="debug.log")
+ch.setLevel(logging.DEBUG)
+ch.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+logger.addHandler(ch)
+
 # Parse a config
 cp = ConfigParser().load("setting.json")
 if not cp:
-    print("Err: Nothing to be parsed")
+    logging.error("Err: Nothing to be parsed")
 valid_users = cp['valid_chat_id']
 
 # Start scheduler
