@@ -37,6 +37,8 @@ class Sentance_Scheduler():
         self.chat_id = chat_id
         self.db = DB_Manager("sentences", chat_id, cb_handler)
         self.t_handler = cb_handler
+        global jobStore
+
         if layer_times:
             self.sched_update(layer_times)
         else:
@@ -44,7 +46,13 @@ class Sentance_Scheduler():
 
     def sched_update(self, layer_times):
         self.time_table.update(layer_times)
-        mainSchedule.remove_all_jobs()
+        if self.chat_id in jobStore.keys():
+            for job in jobStore[self.chat_id]:
+                logger.info("sched_update: remove job : {}".format(job))
+                job.remove()
+            jobStore.pop(self.chat_id)
+        ##mainSchedule.remove_all_jobs()
+        
         for layer, times in self.time_table.items():
             for time in times:
                 self.task_add(self.chat_id, time, layer=layer)
@@ -59,16 +67,22 @@ class Sentance_Scheduler():
         return result
 
     def task_add(self, chat_id, run_at, layer, args=None, pick_mode="RANDOM"):
+        if not chat_id in jobStore.keys():
+            jobStore[chat_id] = []
         if pick_mode == "RANDOM":
-            mainSchedule.add_job(self.db.pick_random, 'cron', hour=run_at.hour, minute=run_at.minute)
+            job = mainSchedule.add_job(self.db.pick_random, 'cron', hour=run_at.hour, minute=run_at.minute)
         elif pick_mode == "LOW_WEIGHT":
-            mainSchedule.add_job(self.db.pick_weight, 'cron', hour=run_at.hour, minute=run_at.minute, args=[layer, chat_id],
+            job = mainSchedule.add_job(self.db.pick_weight, 'cron', hour=run_at.hour, minute=run_at.minute, args=[layer, chat_id],
                                  name=layer)
         else:
             logger.error("Err: args err")
             return
+        jobStore[chat_id].append(job)
 
     def task_modify(self):
+        pass
+
+    def task_remove(self):
         pass
 
 
@@ -168,7 +182,7 @@ ch.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(me
 logger.addHandler(ch)
 
 # Parse a config
-cp = ConfigParser().load("setting.json")
+cp = ConfigParser().load("setting_test.json")
 if not cp:
     logging.error("Err: Nothing to be parsed")
 valid_users = cp['valid_chat_id']
@@ -177,8 +191,12 @@ valid_users = cp['valid_chat_id']
 mainSchedule = BackgroundScheduler(timezone=cp['default_time_zone'])
 mainSchedule.start()
 
+# Job store for scheduler
+jobStore = dict()
+
+
 bot = telepot.DelegatorBot(cp['token'], [
     pave_event_space()(
-        per_chat_id(), create_open, Reminder, timeout=120),
+        per_chat_id(), create_open, Reminder, timeout=10),
 ])
 bot.message_loop(run_forever='Listening ...')
