@@ -32,17 +32,20 @@ class DB_Manager():
 
 class Sentance_Scheduler():
 
-    def __init__(self, chat_id, cb_handler, layer_times=None):
+    def __init__(self, chat_id, cb_handler):
         self.time_table = {}
         self.chat_id = chat_id
         self.db = DB_Manager("sentences", chat_id, cb_handler)
         self.t_handler = cb_handler
         global jobStore
 
+    
+    def sched_register(self, layer_times=None):
         if layer_times:
             self.sched_update(layer_times)
         else:
             self.sched_update({"rock": cp['default_time']})
+
 
     def sched_update(self, layer_times):
         self.time_table.update(layer_times)
@@ -51,19 +54,28 @@ class Sentance_Scheduler():
                 logger.info("sched_update: remove job : {}".format(job))
                 job.remove()
             jobStore.pop(self.chat_id)
-        ##mainSchedule.remove_all_jobs()
-        
+        #mainSchedule.remove_all_jobs()
+
         for layer, times in self.time_table.items():
             for time in times:
                 self.task_add(self.chat_id, time, layer=layer)
 
     def task_all_print(self):
-        if not mainSchedule.get_jobs():
+        logger.info("keys: {}".format(jobStore.keys()))
+        if not self.chat_id in jobStore.keys():
             return 'There is no Notifications'
+
         result = "Notification Table:\n"
-        for i, s in enumerate(mainSchedule.get_jobs()):
-            result += '{0}. Repositary name: {1}\nSetting time:\n{2}\n\n'.format(i + 1, s.name,
+
+        jobs = jobStore[self.chat_id]
+
+        logger.info("jobs: {}".format(jobs))
+        if bool(jobs):
+            for i, s in enumerate(jobs):
+                result += '{0}. Name: {1}\nNext time:\n{2}\n\n'.format(i + 1, s.name,
                                                                                  ":".join(str(s.next_run_time).split(":")[:2]))
+        else:
+            result += "empty\n"
         return result
 
     def task_add(self, chat_id, run_at, layer, args=None, pick_mode="RANDOM"):
@@ -98,6 +110,7 @@ class Reminder(telepot.helper.ChatHandler):
         self.mScheduler = None
 
     def open(self, initial_msg, seed):
+        logger.info("Open()")
         self.do_HOME()
         return True  # prevent on_message() from being called on the initial message
 
@@ -109,6 +122,7 @@ class Reminder(telepot.helper.ChatHandler):
 
     def do_MENU_START(self):
         self.mScheduler = Sentance_Scheduler(self.chatID, self.sched_cb_handler)
+        self.mScheduler.sched_register()
         self.sender.sendMessage("The registration has completed")
 
     def do_MENU_STATUS(self):
@@ -126,6 +140,7 @@ class Reminder(telepot.helper.ChatHandler):
             self.do_MENU_STATUS()
 
     def on_chat_message(self, msg):
+        logger.info("on_chat_message()")
         content_type, chat_type, chat_id = telepot.glance(msg)
         self.chatID = chat_id
 
