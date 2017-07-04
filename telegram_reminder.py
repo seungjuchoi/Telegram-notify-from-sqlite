@@ -1,66 +1,35 @@
 #!/usr/bin/python3
 import json
 import telepot
-import pymongo
 import logging
 from telepot.delegate import per_chat_id, create_open, pave_event_space
 from apscheduler.schedulers.background import BackgroundScheduler
 from datetime import time
-
-
-class DB_Manager():
-
-    def __init__(self, db, collection, cb_handler):  # creation
-        self.db = pymongo.MongoClient()[db]
-        self.col = self.db['M'+str(collection)]
-        self.handler = cb_handler
-
-    def pick_random(self, layer='rock'):
-        text = list(self.col.aggregate([{'$match': {'layer': layer}}, {'$sample': {'size': 1}}]))[0]['Contents']
-        self.handler(text)
-
-    def pick_weight(self, layer, weight_index="weight"):
-        logger.info("TODO: WEIGHT PICK!")
-        pass
-
-    def delete_string(self):
-        pass
-
-    def edit_string(self):
-        pass
-
+import databases
 
 class Sentance_Scheduler():
 
-    def __init__(self, chat_id, cb_handler):
-        self.time_table = {}
+    def __init__(self, chat_id):
         self.chat_id = chat_id
-        self.db = DB_Manager("sentences", chat_id, cb_handler)
-        self.t_handler = cb_handler
+        self.db = databases.SQL3_Manager("DB{}.db".format(chat_id))
         global jobStore
+        global config
 
-    
-    def sched_register(self, layer_times=None):
-        if layer_times:
-            self.sched_update(layer_times)
-        else:
-            self.sched_update({"rock": cp['default_time']})
-
-
-    def sched_update(self, layer_times):
-        self.time_table.update(layer_times)
+    def sched_init(self, layer_times = None):
+        if not layer_times:
+            layer_times = {"rock": config['default_time']}
+        #reset jobStore
         if self.chat_id in jobStore.keys():
             for job in jobStore[self.chat_id]:
                 logger.info("sched_update: remove job : {}".format(job))
                 job.remove()
             jobStore.pop(self.chat_id)
-        #mainSchedule.remove_all_jobs()
 
-        for layer, times in self.time_table.items():
+        for layer, times in layer_times.items():
             for time in times:
-                self.task_add(self.chat_id, time, layer=layer)
+                self.add_task(self.chat_id, time, layer=layer)
 
-    def task_all_print(self):
+    def print_all_tasks(self):
         logger.info("keys: {}".format(jobStore.keys()))
         if not self.chat_id in jobStore.keys():
             return 'There is no Notifications'
@@ -72,42 +41,42 @@ class Sentance_Scheduler():
         logger.info("jobs: {}".format(jobs))
         if bool(jobs):
             for i, s in enumerate(jobs):
-                result += '{0}. Name: {1}\nNext time:\n{2}\n\n'.format(i + 1, s.name,
+                result += '{0}.\n{1}\n{2}\n\n'.format(i + 1, s.name,
                                                                                  ":".join(str(s.next_run_time).split(":")[:2]))
         else:
             result += "empty\n"
         return result
 
-    def task_add(self, chat_id, run_at, layer, args=None, pick_mode="RANDOM"):
+    def add_task(self, chat_id, run_at, layer, pick_mode="RANDOM"):
         if not chat_id in jobStore.keys():
             jobStore[chat_id] = []
         if pick_mode == "RANDOM":
-            job = mainSchedule.add_job(self.db.pick_random, 'cron', hour=run_at.hour, minute=run_at.minute)
+            job = mainSchedule.add_job(self.db.pick_randomly, 'cron', hour=run_at.hour, minute=run_at.minute, args=["rock"])
         elif pick_mode == "LOW_WEIGHT":
-            job = mainSchedule.add_job(self.db.pick_weight, 'cron', hour=run_at.hour, minute=run_at.minute, args=[layer, chat_id],
-                                 name=layer)
+            job = mainSchedule.add_job(self.db.pick_weight, 'cron', hour=run_at.hour, minute=run_at.minute, args=[layer, chat_id])
         else:
             logger.error("Err: args err")
             return
         jobStore[chat_id].append(job)
 
-    def task_modify(self):
+    def modify_task(self):
         pass
 
-    def task_remove(self):
+    def remove_task(self):
         pass
-
 
 
 class Reminder(telepot.helper.ChatHandler):
-    MENU_START = 'Start Notification'
-    MENU_STATUS = 'Notification Status'
+    MENU_START = 'Start Reminder'
+    MENU_STATUS = 'Notification List'
+    MENU_RESET = 'RESET'
     HOME = 'HOME'
 
     def __init__(self, *args, **kwargs):
         super(Reminder, self).__init__(*args, **kwargs)
         logger.info("Start Reminder")
         self.mScheduler = None
+        global schedStore
 
     def open(self, initial_msg, seed):
         logger.info("Open()")
@@ -117,27 +86,46 @@ class Reminder(telepot.helper.ChatHandler):
     def do_HOME(self):
         self.sender.sendMessage("Yes, I'm Re-Reminder.")
         show_keyboard = {'keyboard': [
-            [self.MENU_START], [self.MENU_STATUS], [self.HOME]]}
+            [self.MENU_START], [self.MENU_STATUS], [self.MENU_RESET], [self.HOME]]}
         self.sender.sendMessage('Choose a option.', reply_markup=show_keyboard)
 
     def do_MENU_START(self):
-        self.mScheduler = Sentance_Scheduler(self.chatID, self.sched_cb_handler)
-        self.mScheduler.sched_register()
-        self.sender.sendMessage("The registration has completed")
+        if self.chat_id in schedStore.keys():
+            self.mScheduler = schedStore[self.chat_id]
+            self.sender.sendMessage("Data Restoring has completed")
+        else:
+            self.mScheduler = Sentance_Scheduler(self.chatID)
+            schedStore[self.chat_id] = self.mScheduler
+            self.mScheduler.sched_init()
+            self.sender.sendMessage("The New registration has completed")
+
 
     def do_MENU_STATUS(self):
-        if self.mScheduler != None:
-            self.sender.sendMessage(self.mScheduler.task_all_print())
+        if not self.mScheduler:
+            self.do_MENU_START()
+            self.sender.sendMessage(self.mScheduler.print_all_tasks())
         else:
-            self.sender.sendMessage("There is no notification")
+            self.sender.sendMessage(self.mScheduler.print_all_tasks())
+
+    def do_MENU_RESET(self):
+        logger.info("do_MENU_RESET()")
+        if not self.mScheduler:
+            self.sender.sendMessage("Nothing to do")
+        else:
+            self.mScheduler = None
+            if self.chat_id in schedStore.keys():
+                del schedStore[self.chat_id]
+            self.sender.sendMessage("Your Info has Removed")
 
     def handle_text(self, cmd):
         if cmd == self.MENU_START:
             self.do_MENU_START()
-        if cmd == self.HOME:
+        elif cmd == self.HOME:
             self.do_HOME()
-        if cmd == self.MENU_STATUS:
+        elif cmd == self.MENU_STATUS:
             self.do_MENU_STATUS()
+        elif cmd == self.MENU_RESET:
+            self.do_MENU_RESET()
 
     def on_chat_message(self, msg):
         logger.info("on_chat_message()")
@@ -145,17 +133,13 @@ class Reminder(telepot.helper.ChatHandler):
         self.chatID = chat_id
 
         # Check ID
-        if not chat_id in cp['valid_chat_id']:
+        if not chat_id in config['valid_chat_id']:
             self.sender.sendMessage("Permission Denied")
             return
 
         if content_type is 'text':
             self.handle_text(msg['text'])
             return
-
-    def sched_cb_handler(self, t):
-        #TODO: handle a rich parameter
-        self.sender.sendMessage(t)
 
     def on_close(self, exception):
         pass
@@ -197,20 +181,20 @@ ch.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(me
 logger.addHandler(ch)
 
 # Parse a config
-cp = ConfigParser().load("setting_test.json")
-if not cp:
+config = ConfigParser().load("setting.json")
+if not config:
     logging.error("Err: Nothing to be parsed")
-valid_users = cp['valid_chat_id']
+valid_users = config['valid_chat_id']
 
 # Start scheduler
-mainSchedule = BackgroundScheduler(timezone=cp['default_time_zone'])
+mainSchedule = BackgroundScheduler(timezone=config['default_time_zone'])
 mainSchedule.start()
 
 # Job store for scheduler
 jobStore = dict()
+schedStore = dict()
 
-
-bot = telepot.DelegatorBot(cp['token'], [
+bot = telepot.DelegatorBot(config['token'], [
     pave_event_space()(
         per_chat_id(), create_open, Reminder, timeout=10),
 ])

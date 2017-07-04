@@ -1,11 +1,11 @@
 {
   "common": {
-    "token": "123456789:lskdjflVLKDkdJFslkejfLSDflkes",
+    "token" : "111111111111111111111111111111111",
     "valid_chat_id": [
       111111111,
-      111111111
+      222222222
     ],
-    "default_time" : ["7:45", "12:00", "15:00", "20:00"],
+    "default_time" : ["7:45", "12:00", "15:00", "22:17"],
     "default_time_zone" : "Asia/Seoul"
   }
 }
