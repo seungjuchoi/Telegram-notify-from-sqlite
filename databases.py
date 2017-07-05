@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 import sqlite3
 from pathlib import Path
+import pandas
 
 class SQL3_Manager():
     def __init__(self, file_name = None, table_name = "strings"):
@@ -41,8 +42,18 @@ class SQL3_Manager():
         self.con.commit()
         c.close()
 
+    def import_table(self, file, layer = 'rock'):
+        df = pandas.read_excel(file)
+        df.to_sql(self.table_name, self.con, if_exists='append', index=False)
+
     def edit_string(self):
         pass
+
+    def modify_table(self, col_name, col_type = "text"):
+        c = self.con.cursor()
+        c.execute(""""alter table {} add column '?' '?'""".format(self.table_name), (col_name, col_type))
+        self.con.commit()
+        c.close()
 
     def delete_string(self):
         pass
