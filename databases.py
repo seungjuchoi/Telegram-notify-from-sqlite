@@ -1,5 +1,6 @@
 #!/usr/bin/python3
 import sqlite3
+import hashlib
 from pathlib import Path
 
 class SQL3_Manager():
@@ -34,6 +35,11 @@ class SQL3_Manager():
     def pick_weight(self):
         pass
 
+    def gen_hashID(self, string):
+        m = hashlib.md5()
+        m.update(string.strip().encode("utf-8"))
+        return m.hexdigest()[:8]
+
     def add_string(self, string, layer = "rock"):
         c = self.con.cursor()
         t = (string, layer)
@@ -41,12 +47,15 @@ class SQL3_Manager():
         self.con.commit()
         c.close()
 
+    def parse_exel(self, filepath):
+        pass
+
+
     def edit_string(self):
         pass
 
     def delete_string(self):
         pass
-
 
 if __name__ == '__main__':
     db = SQL3_Manager()
